@@ -6,7 +6,7 @@ import { useTheme } from '../context/ThemeContext';
 import ServerHealthPill from './ServerHealthPill';
 
 export default function Navbar({ activeTab, setActiveTab, queueCount = 3 }) {
-  const { user, isAdmin, isWriter, logout, unreadNotifications } = useAuth();
+  const { user, isAdmin, isWriter, login, logout, unreadNotifications } = useAuth();
   const { language, setLanguage, languages, t } = useLanguage();
   const { isDark, toggleTheme } = useTheme();
 
@@ -15,6 +15,7 @@ export default function Navbar({ activeTab, setActiveTab, queueCount = 3 }) {
 
   // Filter tabs according to role
   const adminTabs = [
+    { id: 'inspector', label: t('nav_inspector', 'Pre-Flight Inspector') },
     { id: 'registry', label: t('nav_registry', 'Rule Registry') },
     { id: 'queue', label: t('nav_queue', 'Review Queue'), badge: queueCount },
     { id: 'telemetry', label: t('nav_telemetry', 'Telemetry & Facts') },
@@ -229,6 +230,52 @@ export default function Navbar({ activeTab, setActiveTab, queueCount = 3 }) {
                 <div className="px-3 py-1.5 text-[11px] font-mono text-zinc-500 dark:text-zinc-400 bg-zinc-50 dark:bg-zinc-800/50 flex items-center justify-between">
                   <span>Active Role:</span>
                   <span className="font-bold text-zinc-800 dark:text-zinc-200">{user?.role}</span>
+                </div>
+
+                {/* Quick Persona Switcher */}
+                <div className="px-2 py-1.5 border-t border-zinc-100 dark:border-zinc-800">
+                  <p className="px-1 text-[10px] font-mono text-zinc-400 uppercase tracking-wider mb-1">
+                    Switch Demo Persona
+                  </p>
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      setUserDropdownOpen(false);
+                      await login('admin', 'admin123');
+                    }}
+                    className={`w-full text-left px-2 py-1 rounded text-[11px] flex items-center justify-between transition cursor-pointer ${
+                      isAdmin ? 'bg-emerald-50 dark:bg-emerald-950/50 text-emerald-800 dark:text-emerald-300 font-semibold' : 'text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800'
+                    }`}
+                  >
+                    <span>Jordan Lee (Admin)</span>
+                    {isAdmin && <span className="text-[10px] text-emerald-600">Active</span>}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      setUserDropdownOpen(false);
+                      await login('writer1', 'writer123');
+                    }}
+                    className={`w-full text-left px-2 py-1 rounded text-[11px] flex items-center justify-between transition cursor-pointer ${
+                      user?.username === 'writer1' ? 'bg-sky-50 dark:bg-sky-950/50 text-sky-800 dark:text-sky-300 font-semibold' : 'text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800'
+                    }`}
+                  >
+                    <span>Alex Morgan (Writer)</span>
+                    {user?.username === 'writer1' && <span className="text-[10px] text-sky-600">Active</span>}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      setUserDropdownOpen(false);
+                      await login('writer2', 'writer123');
+                    }}
+                    className={`w-full text-left px-2 py-1 rounded text-[11px] flex items-center justify-between transition cursor-pointer ${
+                      user?.username === 'writer2' ? 'bg-zinc-100 dark:bg-zinc-800 text-zinc-900 dark:text-white font-semibold' : 'text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800'
+                    }`}
+                  >
+                    <span>Taylor Reed (Writer)</span>
+                    {user?.username === 'writer2' && <span className="text-[10px] text-zinc-600">Active</span>}
+                  </button>
                 </div>
 
                 <div className="border-t border-zinc-100 dark:border-zinc-800 mt-1">
