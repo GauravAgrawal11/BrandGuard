@@ -8,6 +8,7 @@ import governance.views as gov_views
 urlpatterns = [
     # Root Health Check & API Directory
     path('', gov_views.root_api_status_view, name='root_status'),
+    path('api/health/', gov_views.root_api_status_view, name='api_health'),
 
     # Authentication
     path('api/auth/login/', gov_views.auth_login_view, name='auth_login'),

@@ -2,8 +2,10 @@ import React, { useState, useEffect } from 'react';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { LanguageProvider, useLanguage } from './context/LanguageContext';
 import { ThemeProvider, useTheme } from './context/ThemeContext';
+import { ServerHealthProvider } from './context/ServerHealthContext';
 import Navbar from './components/Navbar';
 import LoginView from './components/LoginView';
+import ServerHealthBanner from './components/ServerHealthBanner';
 import ForbiddenGuard from './components/ForbiddenGuard';
 import RuleDetailView from './components/RuleDetailView';
 import ExceptionRequestView from './components/ExceptionRequestView';
@@ -52,16 +54,19 @@ function MainApp() {
   // If user is not logged in, display the Login screen with role redirection
   if (!user) {
     return (
-      <LoginView
-        onLoginSuccess={(loggedInUser) => {
-          if (loggedInUser.role === 'ADMIN') {
-            setActiveTab('registry');
-          } else {
-            setActiveTab('inspector');
-            setInspectorSubView('scan');
-          }
-        }}
-      />
+      <>
+        <ServerHealthBanner />
+        <LoginView
+          onLoginSuccess={(loggedInUser) => {
+            if (loggedInUser.role === 'ADMIN') {
+              setActiveTab('registry');
+            } else {
+              setActiveTab('inspector');
+              setInspectorSubView('scan');
+            }
+          }}
+        />
+      </>
     );
   }
 
@@ -71,6 +76,7 @@ function MainApp() {
 
   return (
     <div className="min-h-screen bg-white dark:bg-zinc-950 text-zinc-950 dark:text-zinc-100 font-sans antialiased selection:bg-emerald-100 dark:selection:bg-emerald-900 selection:text-emerald-900 dark:selection:text-emerald-100 transition-colors">
+      <ServerHealthBanner />
       {/* Global Top Navigation Bar with Role Badge, Language Switcher, Dark Mode, & User Profile */}
       <Navbar
         activeTab={activeTab}
@@ -198,9 +204,11 @@ export default function App() {
   return (
     <ThemeProvider>
       <LanguageProvider>
-        <AuthProvider>
-          <MainApp />
-        </AuthProvider>
+        <ServerHealthProvider>
+          <AuthProvider>
+            <MainApp />
+          </AuthProvider>
+        </ServerHealthProvider>
       </LanguageProvider>
     </ThemeProvider>
   );

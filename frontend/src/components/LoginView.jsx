@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Shield, Lock, User, ArrowRight, AlertCircle, CheckCircle2 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
+import ServerHealthPill from './ServerHealthPill';
 
 export default function LoginView({ onLoginSuccess }) {
   const { login, loading, authError } = useAuth();
@@ -48,6 +49,9 @@ export default function LoginView({ onLoginSuccess }) {
         <p className="mt-1 text-center text-xs font-mono text-zinc-500 uppercase tracking-widest">
           Pre-Publication Compiler & Linter · Ruleset v3.2
         </p>
+        <div className="mt-3 flex justify-center">
+          <ServerHealthPill />
+        </div>
       </div>
 
       <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md px-4 sm:px-0">

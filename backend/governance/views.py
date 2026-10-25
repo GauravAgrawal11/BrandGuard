@@ -46,14 +46,25 @@ from .crypto_sign import (
 @csrf_exempt
 def root_api_status_view(request):
     """
-    GET /
-    Root health check and API status endpoint.
+    GET / or /api/health/
+    Root health check and API status endpoint for Render keep-alive and spin-up monitoring.
     """
+    db_status = "connected"
+    try:
+        from .models import BrandGuardUser
+        BrandGuardUser.objects.exists()
+    except Exception as e:
+        db_status = f"error: {str(e)}"
+
     return JsonResponse({
         "status": "online",
         "service": "BrandGuard Enterprise Governance API",
         "ruleset_version": "v3.2",
+        "database": db_status,
+        "timestamp": datetime.now().isoformat(),
+        "keep_alive": "active",
         "endpoints": {
+            "health": "/api/health/",
             "auth_login": "/api/auth/login/",
             "auth_me": "/api/auth/me/",
             "brand_profile": "/api/brand-profile/",

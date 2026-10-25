@@ -3,6 +3,7 @@ import { Bell, LogOut, Shield, ChevronDown, User, Sun, Moon, Globe } from 'lucid
 import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
 import { useTheme } from '../context/ThemeContext';
+import ServerHealthPill from './ServerHealthPill';
 
 export default function Navbar({ activeTab, setActiveTab, queueCount = 3 }) {
   const { user, isAdmin, isWriter, logout, unreadNotifications } = useAuth();
@@ -112,8 +113,10 @@ export default function Navbar({ activeTab, setActiveTab, queueCount = 3 }) {
           })}
         </nav>
 
-        {/* Right: Language Switcher, Theme Toggle, Notifications & User Dropdown */}
+        {/* Right: Server Health Pill, Language Switcher, Theme Toggle, Notifications & User Dropdown */}
         <div className="flex items-center gap-3">
+          <ServerHealthPill compact />
+
           {/* Multi-Language Selector Dropdown */}
           <div className="relative">
             <button

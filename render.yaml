@@ -8,6 +8,7 @@ services:
     plan: free
     region: oregon
     rootDir: backend
+    healthCheckPath: /api/health/
     buildCommand: "pip install -r requirements.txt && python manage.py collectstatic --noinput && python manage.py migrate && python manage.py seed_demo"
     startCommand: "gunicorn brandguard_core.wsgi:application --bind 0.0.0.0:$PORT"
     envVars:
