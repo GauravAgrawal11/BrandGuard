@@ -22,6 +22,7 @@ from django.views.decorators.csrf import csrf_exempt
 from django.conf import settings
 from django.core.files.base import ContentFile
 from django.contrib.auth import authenticate, login, logout
+from django.db.models import Q
 
 from .models import (
     BrandGuardUser, SystemSettings, BrandProfile, BrandRule, BrandRuleVersion,
@@ -2044,12 +2045,15 @@ def auth_login_view(request):
     user = None
     if username:
         user = authenticate(request, username=username, password=password)
-    if not user and email:
+    if not user:
+        identifier = username or email
         try:
-            cand = BrandGuardUser.objects.get(email__iexact=email)
-            if cand.check_password(password):
+            cand = BrandGuardUser.objects.filter(
+                Q(username__iexact=identifier) | Q(email__iexact=identifier)
+            ).first()
+            if cand and cand.check_password(password):
                 user = cand
-        except BrandGuardUser.DoesNotExist:
+        except Exception:
             pass
 
     if not user:

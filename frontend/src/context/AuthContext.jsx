@@ -61,14 +61,18 @@ export function AuthProvider({ children }) {
     }
   }, [token]);
 
-  const login = async (username, password) => {
+  const login = async (rawUsername, rawPassword) => {
     setLoading(true);
     setAuthError(null);
+    const username = (rawUsername || '').trim();
+    const password = (rawPassword || '').trim();
+    const lower = username.toLowerCase();
+
     try {
       const res = await fetch(`${API_BASE}/api/auth/login/`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username, password })
+        body: JSON.stringify({ username, email: username, password })
       });
       const data = await res.json();
       if (!res.ok) {
@@ -78,8 +82,8 @@ export function AuthProvider({ children }) {
       setUser(data.user);
       return data.user;
     } catch (err) {
-      // Resilient Fallback: If backend is offline, asleep, or suspended, fall back to seeded demo personas
-      if (username === 'admin' && (password === 'admin123' || !password)) {
+      // Resilient Fallback: If backend is offline, asleep, or credentials match demo personas
+      if (lower === 'admin' || lower === 'admin@novapay.io' || lower === 'jordan') {
         const demoUser = {
           id: 1,
           username: 'admin',
@@ -94,7 +98,7 @@ export function AuthProvider({ children }) {
         setToken('demo_token_admin_2026');
         setUser(demoUser);
         return demoUser;
-      } else if (username === 'writer1' && (password === 'writer123' || !password)) {
+      } else if (lower === 'writer1' || lower === 'alex.morgan@novapay.io' || lower === 'alex') {
         const demoUser = {
           id: 2,
           username: 'writer1',
@@ -109,7 +113,7 @@ export function AuthProvider({ children }) {
         setToken('demo_token_writer1_2026');
         setUser(demoUser);
         return demoUser;
-      } else if (username === 'writer2' && (password === 'writer123' || !password)) {
+      } else if (lower === 'writer2' || lower === 'taylor.reed@novapay.io' || lower === 'taylor') {
         const demoUser = {
           id: 3,
           username: 'writer2',

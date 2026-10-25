@@ -4,14 +4,16 @@ const ThemeContext = createContext(null);
 
 export function ThemeProvider({ children }) {
   const [isDark, setIsDark] = useState(() => {
-    const saved = localStorage.getItem('brandguard_theme');
+    const saved = localStorage.getItem('brandguard_theme_preference');
     if (saved !== null) {
       return saved === 'dark';
     }
-    return window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+    // Default mode is strictly light
+    return false;
   });
 
   useEffect(() => {
+    localStorage.setItem('brandguard_theme_preference', isDark ? 'dark' : 'light');
     localStorage.setItem('brandguard_theme', isDark ? 'dark' : 'light');
     if (isDark) {
       document.documentElement.classList.add('dark');

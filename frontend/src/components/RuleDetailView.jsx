@@ -27,7 +27,8 @@ import {
   Lock,
   RefreshCw,
   Copy,
-  Info
+  Info,
+  Clock
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { API_BASE } from '../config/api';
