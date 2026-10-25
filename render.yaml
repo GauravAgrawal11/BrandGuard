@@ -1,0 +1,44 @@
+services:
+  # ==============================================================================
+  # 1. BrandGuard Django REST Backend
+  # ==============================================================================
+  - type: web
+    name: brandguard-backend
+    runtime: python
+    plan: free
+    region: oregon
+    rootDir: backend
+    buildCommand: "pip install -r requirements.txt && python manage.py collectstatic --noinput && python manage.py migrate && python manage.py seed_demo"
+    startCommand: "gunicorn brandguard_core.wsgi:application --bind 0.0.0.0:$PORT"
+    envVars:
+      - key: DJANGO_SETTINGS_MODULE
+        value: brandguard_core.settings
+      - key: DEBUG
+        value: "False"
+      - key: ALLOWED_HOSTS
+        value: "*"
+      - key: SECRET_KEY
+        generateValue: true
+      - key: BRANDGUARD_SECRET_KEY
+        value: "brandguard-hmac-seal-key-2026-production"
+      - key: PYTHON_VERSION
+        value: "3.12.3"
+
+  # ==============================================================================
+  # 2. BrandGuard React Single Page App (Frontend)
+  # ==============================================================================
+  - type: web
+    name: brandguard-frontend
+    runtime: static
+    plan: free
+    region: oregon
+    rootDir: frontend
+    buildCommand: "npm install && npm run build"
+    staticPublishPath: dist
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
+    envVars:
+      - key: VITE_API_BASE
+        sync: false
