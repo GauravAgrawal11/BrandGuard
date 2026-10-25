@@ -1,10 +1,14 @@
 from django.contrib import admin
-from django.urls import path
+from django.urls import path, re_path
 from django.conf import settings
 from django.conf.urls.static import static
+from django.views.static import serve
 import governance.views as gov_views
 
 urlpatterns = [
+    # Root Health Check & API Directory
+    path('', gov_views.root_api_status_view, name='root_status'),
+
     # Authentication
     path('api/auth/login/', gov_views.auth_login_view, name='auth_login'),
     path('api/auth/me/', gov_views.auth_me_view, name='auth_me'),
@@ -47,7 +51,5 @@ urlpatterns = [
     path('api/notifications/integrations/', gov_views.notification_integrations_view, name='notification_integrations'),
     path('api/notifications/test-webhook/', gov_views.test_notification_webhook_view, name='test_notification_webhook'),
     path('api/users/', gov_views.users_management_view, name='users_management'),
+    re_path(r'^media/(?P<path>.*)$', serve, {'document_root': settings.MEDIA_ROOT}),
 ]
-
-if settings.DEBUG:
-    urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

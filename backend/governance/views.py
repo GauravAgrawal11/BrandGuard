@@ -42,6 +42,28 @@ from .crypto_sign import (
     extract_metadata_from_file, LEGAL_NOTICE
 )
 
+@csrf_exempt
+def root_api_status_view(request):
+    """
+    GET /
+    Root health check and API status endpoint.
+    """
+    return JsonResponse({
+        "status": "online",
+        "service": "BrandGuard Enterprise Governance API",
+        "ruleset_version": "v3.2",
+        "endpoints": {
+            "auth_login": "/api/auth/login/",
+            "auth_me": "/api/auth/me/",
+            "brand_profile": "/api/brand-profile/",
+            "rules": "/api/rules/",
+            "facts": "/api/facts/",
+            "submissions": "/api/submissions/",
+            "telemetry": "/api/telemetry/",
+            "exceptions": "/api/exceptions/"
+        }
+    })
+
 
 def get_active_profile():
     """Returns the primary BrandProfile, creating NovaPay default if missing."""
