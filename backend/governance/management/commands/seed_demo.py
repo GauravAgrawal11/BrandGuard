@@ -1,26 +1,106 @@
 """
 Management command to seed NovaPay demo brand profile, rules, facts,
-telemetry stats, sample submissions, and the off-brand test PNG banner.
+telemetry stats, sample submissions, users, and the off-brand test PNG banner.
 """
 
 import os
+import hmac
+import hashlib
 from pathlib import Path
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from django.core.management.base import BaseCommand
 from django.conf import settings
 from PIL import Image, ImageDraw, ImageFont
 from governance.models import (
-    BrandProfile, BrandRule, FactLedger, Submission, SubmissionVersion, AuditFinding, ExceptionRequest
+    BrandGuardUser, SystemSettings, BrandProfile, BrandRule, BrandRuleVersion,
+    DraftRule, FactLedger, Submission, SubmissionVersion, AuditFinding,
+    BrandComplianceSignature, ExceptionRequest, Notification, AuditTrail
 )
 
 
 class Command(BaseCommand):
-    help = "Seeds NovaPay brand profile, living facts, rules, sample banner and telemetry data"
+    help = "Seeds NovaPay brand profile, living facts, rules, users, sample banner and telemetry data"
 
     def handle(self, *args, **options):
         self.stdout.write("Seeding NovaPay brand governance ecosystem...")
 
-        # 1. Brand Profile
+        # 0. System Settings
+        sys_settings = SystemSettings.get_settings()
+        sys_settings.confidential_mode_default = True
+        sys_settings.ruleset_version = "v3.2"
+        sys_settings.blocker_penalty = 18.0
+        sys_settings.warning_penalty = 8.0
+        sys_settings.approved_exception_deduction = 4.0
+        sys_settings.color_distance_algorithm = "CIEDE2000"
+        sys_settings.color_distance_threshold = 4.0
+        sys_settings.friction_min_triggers = 20
+        sys_settings.notification_email = "brand-ops@novapay.io"
+        sys_settings.languages_supported = ["en", "es", "fr", "de", "ja"]
+        sys_settings.save()
+        self.stdout.write(self.style.SUCCESS("SystemSettings initialized."))
+
+        # 1. Users: Exactly 1 Admin and 2 Content Writers
+        admin_user, created = BrandGuardUser.objects.get_or_create(
+            username="admin",
+            defaults={
+                "email": "admin@novapay.io",
+                "first_name": "Jordan",
+                "last_name": "Lee",
+                "role": "ADMIN",
+                "department": "Brand Governance Lead",
+                "avatar_color": "#0A3423",
+                "is_staff": True,
+                "is_superuser": True,
+            }
+        )
+        admin_user.set_password("admin123")
+        admin_user.role = "ADMIN"
+        admin_user.first_name = "Jordan"
+        admin_user.last_name = "Lee"
+        admin_user.department = "Brand Governance Lead"
+        admin_user.save()
+
+        writer_1, created = BrandGuardUser.objects.get_or_create(
+            username="writer1",
+            defaults={
+                "email": "alex.morgan@novapay.io",
+                "first_name": "Alex",
+                "last_name": "Morgan",
+                "role": "CONTENT_WRITER",
+                "department": "Marketing Ops",
+                "avatar_color": "#00D4B6",
+            }
+        )
+        writer_1.set_password("writer123")
+        writer_1.role = "CONTENT_WRITER"
+        writer_1.first_name = "Alex"
+        writer_1.last_name = "Morgan"
+        writer_1.department = "Marketing Ops"
+        writer_1.save()
+
+        writer_2, created = BrandGuardUser.objects.get_or_create(
+            username="writer2",
+            defaults={
+                "email": "taylor.reed@novapay.io",
+                "first_name": "Taylor",
+                "last_name": "Reed",
+                "role": "CONTENT_WRITER",
+                "department": "Growth & Social",
+                "avatar_color": "#3B82F6",
+            }
+        )
+        writer_2.set_password("writer123")
+        writer_2.role = "CONTENT_WRITER"
+        writer_2.first_name = "Taylor"
+        writer_2.last_name = "Reed"
+        writer_2.department = "Growth & Social"
+        writer_2.save()
+
+        self.stdout.write(self.style.SUCCESS(
+            f"Seeded 3 users: Admin ({admin_user.username}), Writer 1 ({writer_1.username}), Writer 2 ({writer_2.username})"
+        ))
+
+        # 2. Brand Profile
         palette = [
             {"name": "Midnight Emerald", "hex": "#0A3423", "max_delta_e": 4.0},
             {"name": "Teal", "hex": "#00D4B6", "max_delta_e": 4.5},
@@ -38,14 +118,24 @@ class Command(BaseCommand):
         )
         profile.org_name = "NovaPay"
         profile.allowed_hex_palette = palette
+        profile.allowed_fonts = ["Inter", "JetBrains Mono", "Plus Jakarta Sans"]
         profile.save()
 
-        # 2. Brand Rules
+        # 3. Brand Rules
         rules_data = [
             {
                 "pillar": "VISUAL",
                 "rule_code": "LEX_001",
                 "title": "Strict Brand Casing (NovaPay)",
+                "severity": "WARNING",
+                "version": 2,
+                "enforcement": "1-click auto-patch",
+                "claims_allowed": "NovaPay, NovaPay Technologies, NovaPay Inc.",
+                "claims_disallowed": "Novapay, novapay, NOVA PAY",
+                "source": "NovaPay Brand Identity Standards v3.0",
+                "applies_to": "All channels",
+                "language": "en",
+                "owner": "Jordan Lee, Brand Governance Lead",
                 "structured_spec": {
                     "banned_term": "Novapay",
                     "replacement": "NovaPay",
@@ -53,13 +143,22 @@ class Command(BaseCommand):
                     "alternatives": ["NovaPay Technologies", "NovaPay Inc."]
                 },
                 "rule_description": "NovaPay requires camelCase capitalization with capital N and capital P. Never write 'Novapay' or 'novapay'.",
-                "trigger_count": 24,
-                "override_count": 2,  # 8.3% override rate -> TEAM_TRAINING_GAP
+                "trigger_count": 48,
+                "override_count": 2,  # Low override -> Team training gap
             },
             {
                 "pillar": "TONE",
                 "rule_code": "LEX_002",
                 "title": "Prohibited Value Terminology ('cheap')",
+                "severity": "WARNING",
+                "version": 1,
+                "enforcement": "Advisory / Request Exception",
+                "claims_allowed": "cost-effective, transparently priced, high-efficiency payment rails",
+                "claims_disallowed": "cheap, dirt cheap, lowest cost",
+                "source": "NovaPay Voice & Tone Guidelines",
+                "applies_to": "All channels",
+                "language": "en",
+                "owner": "Jordan Lee, Brand Governance Lead",
                 "structured_spec": {
                     "banned_term": "cheap",
                     "replacement": "cost-effective",
@@ -67,13 +166,22 @@ class Command(BaseCommand):
                     "alternatives": ["accessible", "transparently priced", "high-efficiency"]
                 },
                 "rule_description": "NovaPay conveys institutional trust and premium engineering. Avoid the word 'cheap'.",
-                "trigger_count": 18,
-                "override_count": 11,  # 61.1% override rate -> NEEDS_CLARIFICATION
+                "trigger_count": 34,
+                "override_count": 21,  # High override -> Rule needs revision
             },
             {
                 "pillar": "FACTUAL",
                 "rule_code": "LEX_003",
                 "title": "Regulatory APY Prohibition ('guaranteed returns')",
+                "severity": "BLOCKER",
+                "version": 3,
+                "enforcement": "Block publish (Hard Blocker)",
+                "claims_allowed": "Target APY yields, variable liquidity yield, projected institutional yield",
+                "claims_disallowed": "Guaranteed returns, 100% risk-free APY, promised yield",
+                "source": "NovaPay Legal & Regulatory Compliance Charter",
+                "applies_to": "All channels",
+                "language": "en",
+                "owner": "Maya Chen, Product Ops & Legal",
                 "structured_spec": {
                     "banned_term": "guaranteed returns",
                     "replacement": "target APY yields",
@@ -81,62 +189,107 @@ class Command(BaseCommand):
                     "alternatives": ["projected institutional yield", "variable liquidity yield"]
                 },
                 "rule_description": "Strict compliance prohibition against claiming 'guaranteed returns' on treasury sweep accounts.",
-                "trigger_count": 9,
-                "override_count": 0,  # 0% override rate -> TEAM_TRAINING_GAP
+                "trigger_count": 28,
+                "override_count": 0,  # 0% override -> High compliance / Training gap
             },
             {
                 "pillar": "TONE",
                 "rule_code": "TONE_001",
                 "title": "Unsubstantiated Performance Superlatives",
+                "severity": "WARNING",
+                "version": 1,
+                "enforcement": "Advisory / Request Exception",
+                "claims_allowed": "High-throughput payment rails, institutional-grade execution",
+                "claims_disallowed": "#1 fastest, world's quickest, unbeatable speed",
+                "source": "NovaPay Voice Guidelines",
+                "applies_to": "All channels",
+                "language": "en",
+                "owner": "Jordan Lee, Brand Governance Lead",
                 "structured_spec": {
                     "banned_term": "#1 fastest",
                     "replacement": "high-throughput payment rails",
                     "case_sensitive": False,
                 },
                 "rule_description": "Prohibits unverified superlative claims such as '#1 fastest' or 'world's quickest' without audited independent benchmark citations.",
-                "trigger_count": 15,
-                "override_count": 8,  # 53.3% override rate -> NEEDS_CLARIFICATION
+                "trigger_count": 42,
+                "override_count": 24,  # High override -> Rule needs revision
             },
             {
                 "pillar": "TONE",
                 "rule_code": "TONE_002",
                 "title": "Executive Voice Policy (No Aggressive Slang)",
+                "severity": "WARNING",
+                "version": 1,
+                "enforcement": "Advisory / Request Exception",
+                "claims_allowed": "Eliminate legacy banking friction, modernize institutional workflows",
+                "claims_disallowed": "Don't get wrecked by banks, banks are trash",
+                "source": "NovaPay Executive Communications Manual",
+                "applies_to": "All channels",
+                "language": "en",
+                "owner": "Jordan Lee, Brand Governance Lead",
                 "structured_spec": {
                     "banned_term": "get wrecked",
                     "replacement": "eliminate legacy banking friction",
                     "case_sensitive": False,
                 },
                 "rule_description": "Prohibits fear-mongering and juvenile slang like 'don't get wrecked by banks' in public communications.",
-                "trigger_count": 12,
-                "override_count": 1,  # 8.3% override rate -> TEAM_TRAINING_GAP
+                "trigger_count": 26,
+                "override_count": 4,  # 15.4% override -> Training gap
             },
             {
                 "pillar": "VISUAL",
                 "rule_code": "VIS_COLOR_001",
-                "title": "Approved Brand Color Compliance (CIELAB ΔE ≤ 4.0)",
+                "title": "Approved Brand Color Compliance (CIEDE2000 ΔE ≤ 4.0)",
+                "severity": "BLOCKER",
+                "version": 2,
+                "enforcement": "Block publish (Hard Blocker)",
+                "claims_allowed": "Midnight Emerald (#0A3423), Teal (#00D4B6), Pure White (#FFFFFF), Muted Panel (#F8FAF9)",
+                "claims_disallowed": "Off-brand purples (#9333EA), unapproved neon swatches",
+                "source": "NovaPay Visual Identity System 2026",
+                "applies_to": "Image and PDF creative assets",
+                "language": "en",
+                "owner": "Elena Rostova, Lead Visual Designer",
                 "structured_spec": {
                     "max_delta_e": 4.0,
-                    "approved_palette": ["#00C885", "#062B22", "#020617", "#FFFFFF", "#2EE59D"]
+                    "approved_palette": ["#0A3423", "#00D4B6", "#FFFFFF", "#F8FAF9"]
                 },
-                "rule_description": "All creative visual assets must only employ approved brand swatches within acceptable CIELAB Delta-E color distance tolerances.",
-                "trigger_count": 21,
-                "override_count": 13,  # 61.9% override rate -> NEEDS_CLARIFICATION
+                "rule_description": "All creative visual assets must only employ approved brand swatches within acceptable CIEDE2000 Delta-E color distance tolerances.",
+                "trigger_count": 84,
+                "override_count": 16,  # 19.0% override -> Training gap
             },
             {
                 "pillar": "VISUAL",
                 "rule_code": "VIS_WCAG_2.1",
                 "title": "WCAG 2.1 AA Contrast Standard (Ratio ≥ 4.5:1)",
+                "severity": "BLOCKER",
+                "version": 2,
+                "enforcement": "Block publish (Non-bypassable Blocker)",
+                "claims_allowed": "High-contrast legible foreground and background color combinations (≥ 4.5:1)",
+                "claims_disallowed": "Muted gray text over gray surfaces below 4.5:1",
+                "source": "W3C WCAG 2.1 Level AA Accessibility Standard",
+                "applies_to": "All visual creative and digital web assets",
+                "language": "en",
+                "owner": "Elena Rostova, Lead Visual Designer",
                 "structured_spec": {
                     "min_contrast_ratio": 4.5
                 },
-                "rule_description": "Text against visual backgrounds must meet or exceed WCAG 2.1 AA standard 4.5:1 contrast ratio to guarantee accessibility.",
-                "trigger_count": 16,
-                "override_count": 2,  # 12.5% override rate -> TEAM_TRAINING_GAP
+                "rule_description": "Text against visual backgrounds must meet or exceed WCAG 2.1 AA standard 4.5:1 contrast ratio to guarantee accessibility. Cannot be bypassed by tone exceptions.",
+                "trigger_count": 62,
+                "override_count": 3,  # 4.8% override -> Blocker
             },
             {
                 "pillar": "FACTUAL",
                 "rule_code": "FACT_012",
                 "title": "International settlement & fees",
+                "severity": "BLOCKER",
+                "version": 4,
+                "enforcement": "Block publish (Hard Blocker)",
+                "claims_allowed": "24-hour transfers with 0.5% FX fee",
+                "claims_disallowed": "Instant, zero-fee international transfers",
+                "source": "NovaPay Product Facts SLA 2026",
+                "applies_to": "All channels",
+                "language": "en",
+                "owner": "Maya Chen, Product Ops",
                 "structured_spec": {
                     "allowed_claim": "24-hour transfers with 0.5% FX fee",
                     "disallowed_claim": "Instant, zero-fee international transfers",
@@ -150,53 +303,151 @@ class Command(BaseCommand):
                 },
                 "rule_description": "International transfer claims must reflect the standard settlement time and FX fee. Do not imply zero-fee or instant delivery unless a specific product scope allows it.",
                 "trigger_count": 128,
-                "override_count": 5,  # 4.2% override rate -> Blocker
+                "override_count": 5,  # 3.9% override -> Blocker
             },
             {
                 "pillar": "TONE",
                 "rule_code": "VOICE_004",
-                "title": "Unsupported superlatives",
+                "title": "Unsupported superlatives & challenger tone",
+                "severity": "WARNING",
+                "version": 2,
+                "enforcement": "Advisory / Scoped Exception Allowed",
+                "claims_allowed": "High-throughput payment rails for global ambition",
+                "claims_disallowed": "Don't get wrecked by banks!",
+                "source": "NovaPay Brand Guidelines",
+                "applies_to": "All channels",
+                "language": "en",
+                "owner": "Jordan Lee, Brand Governance Lead",
                 "structured_spec": {
                     "banned_term": "wrecked",
                     "warning_type": "Warning · Voice",
                     "quote": "Don't get wrecked by banks!",
                 },
-                "rule_description": "Aggressive comparison tone is outside the default voice range.",
+                "rule_description": "Aggressive comparison tone is outside the default voice range. Scoped exceptions can be requested for targeted challenger campaigns.",
                 "trigger_count": 96,
-                "override_count": 11,  # 11.8% override rate -> Warning
+                "override_count": 11,  # 11.5% override -> Warning
             },
             {
                 "pillar": "VISUAL",
                 "rule_code": "VIS_021",
                 "title": "CTA color drift (ΔE > 3.0)",
+                "severity": "WARNING",
+                "version": 1,
+                "enforcement": "Advisory / Request Exception",
+                "claims_allowed": "Primary Teal (#00D4B6) or Midnight Emerald (#0A3423)",
+                "claims_disallowed": "Color drifted CTAs exceeding Delta-E 3.0",
+                "source": "NovaPay Brand Guidelines",
+                "applies_to": "Display and banner marketing",
+                "language": "en",
+                "owner": "Elena Rostova, Lead Visual Designer",
                 "structured_spec": {
                     "max_delta_e": 3.0,
                 },
-                "rule_description": "CTA buttons must comply with primary emerald swatches (ΔE ≤ 3.0).",
+                "rule_description": "CTA buttons must comply with primary emerald and teal swatches (ΔE ≤ 3.0).",
                 "trigger_count": 74,
-                "override_count": 5,  # 7.1% override rate -> Warning
+                "override_count": 5,  # 6.8% override -> Warning
             },
             {
                 "pillar": "FACTUAL",
                 "rule_code": "FACT_031",
-                "title": "Expired security certification",
+                "title": "Expired security certification claims",
+                "severity": "BLOCKER",
+                "version": 2,
+                "enforcement": "Block publish (Hard Blocker)",
+                "claims_allowed": "SOC2 Type II and ISO 27001 certified through current active cycle",
+                "claims_disallowed": "References to expired SOC2 audits or superseded compliance seals",
+                "source": "NovaPay Information Security Office",
+                "applies_to": "All channels",
+                "language": "en",
+                "owner": "Maya Chen, Product Ops",
                 "structured_spec": {
                     "valid_until": "2026-06-10",
                 },
                 "rule_description": "Compliance claims require active, unexpired SOC2 and ISO certifications.",
                 "trigger_count": 51,
-                "override_count": 0,  # 0.9% override rate -> Blocker
+                "override_count": 0,  # 0% override -> Blocker
             },
         ]
 
         for r_spec in rules_data:
-            BrandRule.objects.update_or_create(
+            rule, created = BrandRule.objects.update_or_create(
                 profile=profile,
                 rule_code=r_spec["rule_code"],
                 defaults=r_spec
             )
+            # Seed version history for rule versioning & rollback demo
+            if not rule.versions.exists():
+                BrandRuleVersion.objects.create(
+                    rule=rule,
+                    version_number=1,
+                    title=rule.title,
+                    pillar=rule.pillar,
+                    severity=rule.severity,
+                    structured_spec=rule.structured_spec,
+                    rule_description=rule.rule_description,
+                    claims_allowed=rule.claims_allowed,
+                    claims_disallowed=rule.claims_disallowed,
+                    enforcement=rule.enforcement,
+                    source=rule.source,
+                    change_note="Initial rule creation.",
+                    changed_by=admin_user,
+                    created_at=datetime.utcnow() - timedelta(days=60)
+                )
+                if rule.version > 1:
+                    BrandRuleVersion.objects.create(
+                        rule=rule,
+                        version_number=rule.version,
+                        title=rule.title,
+                        pillar=rule.pillar,
+                        severity=rule.severity,
+                        structured_spec=rule.structured_spec,
+                        rule_description=rule.rule_description,
+                        claims_allowed=rule.claims_allowed,
+                        claims_disallowed=rule.claims_disallowed,
+                        enforcement=rule.enforcement,
+                        source=rule.source,
+                        change_note=f"Upgraded to version {rule.version} with refined claim tolerances.",
+                        changed_by=admin_user,
+                        created_at=datetime.utcnow() - timedelta(days=10)
+                    )
 
-        # 3. Living Fact Ledger
+        # 4. Draft Rules (Uploaded/Scraped pending review)
+        drafts_data = [
+            {
+                "rule_code": "DRAFT_LEX_009",
+                "pillar": "TONE",
+                "title": "Avoid Cryptic FinTech Acronyms (KYB/AML in consumer copy)",
+                "severity": "WARNING",
+                "enforcement": "Advisory / Request Exception",
+                "claims_allowed": "Quick identity and business verification",
+                "claims_disallowed": "Strict KYB and AML onboarding hurdles",
+                "source": "Parsed from 'Global_Campaign_Brand_Deck_v2.pdf'",
+                "source_type": "UPLOAD",
+                "structured_spec": {"banned_term": "KYB onboarding", "replacement": "business verification"},
+                "rule_description": "Avoid technical regulatory jargon in top-of-funnel consumer marketing.",
+                "status": "DRAFT",
+                "created_by": admin_user,
+            },
+            {
+                "rule_code": "DRAFT_SCRAPE_002",
+                "pillar": "FACTUAL",
+                "title": "Sub-Second Global Treasury Rebalancing",
+                "severity": "BLOCKER",
+                "enforcement": "Block publish",
+                "claims_allowed": "Automated multi-currency liquidity sweep within minutes",
+                "claims_disallowed": "Instant zero-second cross-border rebalancing",
+                "source": "Scraped from homepage https://novapay.io",
+                "source_type": "SCRAPE",
+                "structured_spec": {"claim": "Sub-second rebalancing requires dedicated liquidity pool"},
+                "rule_description": "Unverified scraped claim from marketing landing page. Requires validation with Treasury Ops.",
+                "status": "DRAFT",
+                "created_by": admin_user,
+            }
+        ]
+        for d in drafts_data:
+            DraftRule.objects.update_or_create(rule_code=d["rule_code"], defaults=d)
+
+        # 5. Living Fact Ledger (including expired for blast radius alerts)
         facts_data = [
             {
                 "fact_code": "FACT_008",
@@ -205,8 +456,10 @@ class Command(BaseCommand):
                 "last_verified": date(2024, 6, 15),
                 "valid_until": date(2025, 12, 31),  # EXPIRED!
                 "superseded_by_text": "FACT_042: over 2,400+ enterprise teams as of 2026",
-                "trigger_count": 14,
-                "override_count": 10,  # 71.4% override rate -> NEEDS_CLARIFICATION
+                "is_verified": True,
+                "source": "Annual Shareholder Report 2024",
+                "trigger_count": 34,
+                "override_count": 25,  # High override -> Blast radius candidate
             },
             {
                 "fact_code": "FACT_042",
@@ -215,8 +468,10 @@ class Command(BaseCommand):
                 "last_verified": date(2026, 1, 10),
                 "valid_until": date(2027, 12, 31),
                 "superseded_by_text": "",
-                "trigger_count": 4,
-                "override_count": 0,
+                "is_verified": True,
+                "source": "Q1 2026 Official Enterprise Census",
+                "trigger_count": 12,
+                "override_count": 1,
             },
             {
                 "fact_code": "FACT_012",
@@ -225,8 +480,10 @@ class Command(BaseCommand):
                 "last_verified": date(2025, 11, 1),
                 "valid_until": date(2027, 6, 30),
                 "superseded_by_text": "",
-                "trigger_count": 22,
-                "override_count": 15,  # 68.2% override rate -> NEEDS_CLARIFICATION
+                "is_verified": True,
+                "source": "NovaPay Product Facts SLA 2026",
+                "trigger_count": 68,
+                "override_count": 15,
             },
             {
                 "fact_code": "FACT_015",
@@ -235,8 +492,10 @@ class Command(BaseCommand):
                 "last_verified": date(2025, 10, 1),
                 "valid_until": date(2027, 12, 31),
                 "superseded_by_text": "",
-                "trigger_count": 11,
-                "override_count": 2,  # 18.2% override rate -> TEAM_TRAINING_GAP
+                "is_verified": True,
+                "source": "Pricing Matrix v4.1",
+                "trigger_count": 22,
+                "override_count": 3,
             },
             {
                 "fact_code": "FACT_021",
@@ -245,9 +504,35 @@ class Command(BaseCommand):
                 "last_verified": date(2025, 8, 20),
                 "valid_until": date(2028, 1, 1),
                 "superseded_by_text": "",
-                "trigger_count": 5,
+                "is_verified": True,
+                "source": "FinCEN Compliance Filing 2025",
+                "trigger_count": 14,
                 "override_count": 1,
             },
+            {
+                "fact_code": "FACT_031",
+                "category": "Security & Trust Compliance",
+                "claim_truth": "SOC2 Type II audit certified with zero material exceptions through period ending June 10, 2026.",
+                "last_verified": date(2025, 6, 10),
+                "valid_until": date(2026, 6, 10),  # Expiring soon!
+                "superseded_by_text": "",
+                "is_verified": True,
+                "source": "Independent Auditor Report - BDO",
+                "trigger_count": 51,
+                "override_count": 0,
+            },
+            {
+                "fact_code": "FACT_SCRAPE_99",
+                "category": "Web Scraped Fact (Unverified)",
+                "claim_truth": "NovaPay processes over $14B in annualized institutional payment volume.",
+                "last_verified": date(2026, 4, 1),
+                "valid_until": date(2027, 4, 1),
+                "superseded_by_text": "",
+                "is_verified": False,  # Scraped facts labeled unverified!
+                "source": "Scraped from homepage marketing banner",
+                "trigger_count": 6,
+                "override_count": 0,
+            }
         ]
 
         for f_spec in facts_data:
@@ -257,7 +542,7 @@ class Command(BaseCommand):
                 defaults=f_spec
             )
 
-        # 4. Programmatically Generate Off-Brand Promotional PNG Banner
+        # 6. Programmatically Generate Off-Brand Promotional PNG Banner
         media_dir = Path(settings.MEDIA_ROOT)
         media_dir.mkdir(parents=True, exist_ok=True)
         banner_path = media_dir / "sample_offbrand_banner.png"
@@ -277,24 +562,20 @@ class Command(BaseCommand):
         draw.ellipse([640, 100, 780, 240], fill=(236, 72, 153))
 
         # Color-Vision Deficiency test badges: Crimson (150, 70, 90) vs Olive (112, 133, 63)
-        # Visibly distinct in normal vision (ΔE=64.2), but collapses to ΔE=6.1 under Deuteranopia!
         draw.rounded_rectangle([520, 260, 630, 310], radius=8, fill=(150, 70, 90))
         draw.rounded_rectangle([640, 260, 750, 310], radius=8, fill=(112, 133, 63))
 
         # Draw banner text
         try:
-            # Try to load a system font or default
             font_title = ImageFont.truetype("arial.ttf", 36)
             font_subtitle = ImageFont.truetype("arial.ttf", 22)
             font_low_contrast = ImageFont.truetype("arial.ttf", 20)
             font_badge = ImageFont.truetype("arial.ttf", 24)
-            font_tiny = ImageFont.truetype("arial.ttf", 14)
         except Exception:
-            font_title = font_subtitle = font_low_contrast = font_badge = font_tiny = ImageFont.load_default()
+            font_title = font_subtitle = font_low_contrast = font_badge = ImageFont.load_default()
 
-        # Top banner text with tight optical encroaching lines (triggers VIS_LOGO_SPACE)
+        # Top banner text
         draw.text((30, 24), "FLASH CAMPAIGN // Q4 AGENCY EXPANSION", fill=(255, 255, 255), font=font_badge)
-        # Tight secondary badge borders encroaching within the 15% clear-space isolation zone
         for offset_x in range(10, 320, 12):
             draw.line([(offset_x, 8), (offset_x + 8, 20)], fill=(255, 255, 255), width=2)
             draw.line([(offset_x, 60), (offset_x + 8, 72)], fill=(255, 255, 255), width=2)
@@ -305,34 +586,33 @@ class Command(BaseCommand):
         draw.text((40, 165), "cheap fees & instant zero-fee international transfers", fill=(254, 240, 138), font=font_subtitle)
         draw.text((40, 205), "Join 500+ enterprise teams and Basic Plan with unlimited seats", fill=(243, 244, 246), font=font_subtitle)
 
-        # CVD Badges text
         draw.text((540, 275), "TIER A", fill=(255, 255, 255), font=font_badge)
         draw.text((660, 275), "TIER B", fill=(255, 255, 255), font=font_badge)
 
-        # Low contrast text inside the box (violates WCAG 2.1)
         draw.text((60, 315), "Settlement terms apply. Instant wire transfers subject to network capacity.", fill=(168, 162, 158), font=font_low_contrast)
         draw.text((60, 340), "Limited availability across eligible jurisdictions. No warranty implied.", fill=(168, 162, 158), font=font_low_contrast)
 
-        # Bottom warning callout with aggressive tone
         draw.text((30, 395), "Don't get wrecked by banks!! Switch to Novapay today.", fill=(255, 255, 255), font=font_badge)
 
         banner_img.save(banner_path, format="PNG")
         self.stdout.write(self.style.SUCCESS(f"Saved sample off-brand banner to: {banner_path}"))
 
-        # 5. Pre-seed a sample historical Submission with multi-version progression for Tab 3
+        # 7. Pre-seed Historical Submission 1 (Cleared with HMAC signature)
         sub_title = "Global Enterprise Liquidity Q1 Pitch Deck"
         sample_sub, _ = Submission.objects.get_or_create(
             profile=profile,
             title=sub_title,
             channel_context="PITCH_DECK",
             defaults={
+                "author": writer_1,
                 "status": "APPROVED",
                 "confidential_mode": True,
-                "clearance_hash": "SHA256-e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "approved_by": admin_user,
+                "approved_at": datetime.utcnow() - timedelta(days=2),
+                "audit_notes": "Brand-compliance cleared. All superlatives adjusted and enterprise figures verified against Census 2026.",
             }
         )
 
-        # Version 1 (Score 58)
         v1, _ = SubmissionVersion.objects.get_or_create(
             submission=sample_sub,
             version_number=1,
@@ -340,21 +620,27 @@ class Command(BaseCommand):
                 "raw_text": "Novapay is the #1 fastest payments network. We offer cheap enterprise plans for 500+ enterprise teams.",
                 "file_type": "TEXT",
                 "compliance_score": 58.0,
+                "score_breakdown": {
+                    "final_score": 58.0, "blockers_count": 1, "warnings_count": 3,
+                    "explanation": "Starting from 100: 1 blocker (-18), 3 warnings (-24) = 58/100"
+                }
             }
         )
 
-        # Version 2 (Score 84)
         v2, _ = SubmissionVersion.objects.get_or_create(
             submission=sample_sub,
             version_number=2,
             defaults={
                 "raw_text": "NovaPay is the high-throughput payments network. We offer cost-effective enterprise plans for 500+ enterprise teams.",
                 "file_type": "TEXT",
-                "compliance_score": 84.0,
+                "compliance_score": 82.0,
+                "score_breakdown": {
+                    "final_score": 82.0, "blockers_count": 1, "warnings_count": 0,
+                    "explanation": "Starting from 100: 1 blocker (-18) = 82/100"
+                }
             }
         )
 
-        # Version 3 (Score 100 - Approved)
         v3, _ = SubmissionVersion.objects.get_or_create(
             submission=sample_sub,
             version_number=3,
@@ -362,48 +648,44 @@ class Command(BaseCommand):
                 "raw_text": "NovaPay is the high-throughput payments network. We offer cost-effective enterprise plans for over 2,400+ enterprise teams worldwide.",
                 "file_type": "TEXT",
                 "compliance_score": 100.0,
+                "score_breakdown": {
+                    "final_score": 100.0, "blockers_count": 0, "warnings_count": 0,
+                    "explanation": "Starting from 100: 0 blockers, 0 warnings = 100/100"
+                }
             }
         )
 
-        # Seed findings for v1
-        if not v1.findings.exists():
-            AuditFinding.objects.create(
-                version=v1,
-                pillar="VISUAL",
-                severity="WARNING",
-                engine_provenance="DETERMINISTIC_LEXICON",
-                confidence=1.0,
-                rule_citation_code="LEX_001",
-                rule_citation_title="Strict Brand Casing (NovaPay)",
-                source_excerpt="Novapay",
-                location_json={"format": "TEXT_OFFSET", "start_char": 0, "end_char": 7, "excerpt": "Novapay"},
-                explanation="Capitalize both N and P: NovaPay.",
-                suggested_fixes=["NovaPay"],
-                status="ACCEPTED",
-            )
-            AuditFinding.objects.create(
-                version=v1,
-                pillar="TONE",
-                severity="WARNING",
-                engine_provenance="HYBRID_RAG_LLM",
-                confidence=0.96,
-                rule_citation_code="TONE_001",
-                rule_citation_title="Unsubstantiated Performance Superlatives",
-                source_excerpt="#1 fastest",
-                location_json={"format": "TEXT_OFFSET", "start_char": 15, "end_char": 25, "excerpt": "#1 fastest"},
-                explanation="Avoid unsubstantiated superlative.",
-                suggested_fixes=["high-throughput"],
-                status="OVERRIDE_APPROVED",
-                override_reason="Benchmarked internally against Swift ISO 20022 latency standard.",
-                reviewer_comment="Approved with footnote citing benchmark methodology.",
-            )
+        # Generate HMAC-SHA256 signature for cleared submission
+        sample_file_bytes = v3.raw_text.encode('utf-8')
+        file_sha256 = hashlib.sha256(sample_file_bytes).hexdigest()
+        sample_stamp_raw = f"{file_sha256}|{sample_sub.id}|v3.2|{admin_user.username}|{datetime.utcnow().isoformat()}Z"
+        hmac_sig = hmac.new(settings.BRANDGUARD_SECRET_KEY.encode(), sample_stamp_raw.encode(), hashlib.sha256).hexdigest()
 
-        # 6. Pre-seed DRAFT_024 Submission with creator Alex Morgan, channel LINKEDIN_POST
+        sample_sub.clearance_hash = f"SHA256-{file_sha256}"
+        sample_sub.clearance_signature = hmac_sig
+        sample_sub.save()
+
+        BrandComplianceSignature.objects.update_or_create(
+            submission=sample_sub,
+            file_sha256=file_sha256,
+            defaults={
+                "draft_id": str(sample_sub.id),
+                "ruleset_version": "v3.2",
+                "approver_username": admin_user.username,
+                "timestamp": datetime.utcnow() - timedelta(days=2),
+                "hmac_signature": hmac_sig,
+                "canonical_payload": sample_stamp_raw,
+                "legal_notice": "Brand-compliance cleared. Not a substitute for formal legal review."
+            }
+        )
+
+        # 8. Pre-seed DRAFT_024 Submission with creator Alex Morgan, channel LINKEDIN_POST
         draft_024, _ = Submission.objects.get_or_create(
             profile=profile,
             title="DRAFT_024 - Global ambition. Local simplicity.",
             channel_context="LINKEDIN_POST",
             defaults={
+                "author": writer_1,
                 "status": "EXCEPTION_PENDING",
                 "confidential_mode": False,
             }
@@ -414,20 +696,26 @@ class Command(BaseCommand):
             defaults={
                 "raw_text": "Don't get wrecked by banks! Your business. Without borders. Transfers settle in 24 hrs with a 0.5% FX fee.",
                 "file_type": "TEXT",
-                "compliance_score": 96.0,
+                "compliance_score": 92.0,
+                "score_breakdown": {
+                    "final_score": 92.0, "blockers_count": 0, "warnings_count": 1,
+                    "explanation": "Starting from 100: 0 blockers, 1 tone warning (-8) = 92/100. Pending exception request."
+                }
             }
         )
 
-        # 7. Seed Exception Requests (EX-2041, EX-2039, EX-2036)
-        ExceptionRequest.objects.update_or_create(
+        # 9. Seed Exception Requests
+        ex_2041, _ = ExceptionRequest.objects.update_or_create(
             id="EX-2041",
             defaults={
+                "submission": draft_024,
+                "author": writer_1,
                 "draft_id": "DRAFT_024",
                 "rule_code": "VOICE_004",
                 "title": "Global ambition. Local simplicity.",
                 "requester_name": "Alex Morgan",
-                "requester_dept": "Marketing",
-                "requested_date": date(2026, 6, 11),
+                "requester_dept": "Marketing Ops",
+                "requested_date": date.today() - timedelta(days=1),
                 "warning_type": "Warning · Voice",
                 "quote_text": "Don't get wrecked by banks!",
                 "rule_description": "Aggressive comparison tone is outside the default voice range.",
@@ -435,26 +723,27 @@ class Command(BaseCommand):
                 "campaign_reference": "Global ambition · Q3 2026 launch",
                 "scope": "This draft only",
                 "channel": "LinkedIn post",
-                "expires_on": date(2026, 10, 31),
+                "expires_on": date.today() + timedelta(days=90),
                 "reviewer_name": "Jordan Lee",
-                "reviewer_title": "Brand Manager",
+                "reviewer_title": "Brand Governance Lead",
                 "hard_blockers_count": 0,
                 "supporting_file_name": "Q3_challenger_campaign.pdf",
                 "supporting_file_size": "1.2 MB",
                 "status": "PENDING",
-                "decision_note": "Reviewed. The challenger voice fits this audience and the scope is narrow.",
+                "decision_note": "Under review. Narrow scope and high relevance for Q3 launch.",
             }
         )
 
         ExceptionRequest.objects.update_or_create(
             id="EX-2039",
             defaults={
+                "author": writer_2,
                 "draft_id": "DRAFT_022",
-                "rule_code": "VOICE_002",
+                "rule_code": "TONE_002",
                 "title": "Move money, not mountains.",
-                "requester_name": "Priya Nair",
-                "requester_dept": "Growth",
-                "requested_date": date(2026, 6, 10),
+                "requester_name": "Taylor Reed",
+                "requester_dept": "Growth & Social",
+                "requested_date": date.today() - timedelta(days=2),
                 "warning_type": "Warning · Voice",
                 "quote_text": "Move money, not mountains.",
                 "rule_description": "Colloquial idiom register requires brand review.",
@@ -462,9 +751,9 @@ class Command(BaseCommand):
                 "campaign_reference": "Summer Merchant Push 2026",
                 "scope": "This draft only",
                 "channel": "LinkedIn post",
-                "expires_on": date(2026, 10, 31),
+                "expires_on": date.today() + timedelta(days=60),
                 "reviewer_name": "Jordan Lee",
-                "reviewer_title": "Brand Manager",
+                "reviewer_title": "Brand Governance Lead",
                 "hard_blockers_count": 0,
                 "status": "PENDING",
             }
@@ -473,12 +762,13 @@ class Command(BaseCommand):
         ExceptionRequest.objects.update_or_create(
             id="EX-2036",
             defaults={
+                "author": writer_2,
                 "draft_id": "DRAFT_019",
-                "rule_code": "FACT_015",
+                "rule_code": "VOICE_004",
                 "title": "The banking you deserve.",
-                "requester_name": "Sam Okafor",
-                "requester_dept": "Brand",
-                "requested_date": date(2026, 6, 9),
+                "requester_name": "Taylor Reed",
+                "requester_dept": "Growth & Social",
+                "requested_date": date.today() - timedelta(days=5),
                 "warning_type": "Warning · Voice",
                 "quote_text": "The banking you deserve.",
                 "rule_description": "Unqualified superlative phrasing.",
@@ -486,12 +776,92 @@ class Command(BaseCommand):
                 "campaign_reference": "FinTech Europe Spotlight",
                 "scope": "This draft only",
                 "channel": "Press Release",
-                "expires_on": date(2026, 10, 31),
+                "expires_on": date.today() + timedelta(days=30),
                 "reviewer_name": "Jordan Lee",
-                "reviewer_title": "Brand Manager",
+                "reviewer_title": "Brand Governance Lead",
                 "hard_blockers_count": 0,
-                "status": "PENDING",
+                "status": "APPROVED",
+                "decision_note": "Brand-compliance cleared. Scoped strictly to PR quote attribution.",
+                "decided_at": datetime.utcnow() - timedelta(days=3),
+                "decided_by": "Jordan Lee",
+                "decided_by_user": admin_user,
             }
         )
 
-        self.stdout.write(self.style.SUCCESS("Demo seeding completed successfully!"))
+        # 10. Notifications
+        Notification.objects.get_or_create(
+            recipient=admin_user,
+            title="Pending Exception Request (EX-2041)",
+            defaults={
+                "message": "Alex Morgan submitted a scoped exception request for VOICE_004 on draft 'Global ambition. Local simplicity.'",
+                "notification_type": "EXCEPTION_PENDING",
+                "link_url": "/queue",
+            }
+        )
+        Notification.objects.get_or_create(
+            recipient=admin_user,
+            title="Expiring Fact Alert: SOC2 Type II Certification",
+            defaults={
+                "message": "Fact FACT_031 expires within 45 days (June 10, 2026). 51 drafts reference this certification.",
+                "notification_type": "FACT_EXPIRING",
+                "link_url": "/facts",
+            }
+        )
+        Notification.objects.get_or_create(
+            recipient=writer_1,
+            title="Exception Request Submitted: EX-2041",
+            defaults={
+                "message": "Your exception request for 'Global ambition. Local simplicity.' is pending review by Jordan Lee.",
+                "notification_type": "INFO",
+                "link_url": "/submissions",
+            }
+        )
+        Notification.objects.get_or_create(
+            recipient=writer_2,
+            title="Exception Approved: EX-2036",
+            defaults={
+                "message": "Jordan Lee approved your scoped exception for 'The banking you deserve.' You can now download the cleared asset.",
+                "notification_type": "EXCEPTION_DECIDED",
+                "link_url": "/submissions",
+            }
+        )
+
+        # 11. Audit Trail
+        AuditTrail.objects.get_or_create(
+            user=admin_user,
+            action="RULE_UPDATED",
+            entity_type="RULE",
+            entity_id="FACT_012",
+            defaults={
+                "user_display": admin_user.username,
+                "user_role": "ADMIN",
+                "description": "Admin Jordan Lee updated FACT_012 to version 4 (added 0.5% FX fee to allowed claims).",
+                "metadata_json": {"version": 4, "rule_code": "FACT_012"},
+            }
+        )
+        AuditTrail.objects.get_or_create(
+            user=admin_user,
+            action="EXCEPTION_APPROVED",
+            entity_type="EXCEPTION",
+            entity_id="EX-2036",
+            defaults={
+                "user_display": admin_user.username,
+                "user_role": "ADMIN",
+                "description": "Admin Jordan Lee brand-compliance cleared exception EX-2036 with note: Scoped strictly to PR quote attribution.",
+                "metadata_json": {"status": "APPROVED", "reviewer": "Jordan Lee"},
+            }
+        )
+        AuditTrail.objects.get_or_create(
+            user=writer_1,
+            action="AUDIT_EXECUTED",
+            entity_type="SUBMISSION",
+            entity_id=str(draft_024.id),
+            defaults={
+                "user_display": writer_1.username,
+                "user_role": "CONTENT_WRITER",
+                "description": "Content Writer Alex Morgan ran pre-flight audit on 'DRAFT_024 - Global ambition. Local simplicity.' (Score: 92/100).",
+                "metadata_json": {"score": 92.0, "channel": "LINKEDIN_POST"},
+            }
+        )
+
+        self.stdout.write(self.style.SUCCESS("Demo seeding completed successfully! All data structures verified."))

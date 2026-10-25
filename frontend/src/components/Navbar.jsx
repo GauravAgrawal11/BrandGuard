@@ -1,99 +1,251 @@
-import React from 'react';
-import { Bell } from 'lucide-react';
+import React, { useState } from 'react';
+import { Bell, LogOut, Shield, ChevronDown, User, Sun, Moon, Globe } from 'lucide-react';
+import { useAuth } from '../context/AuthContext';
+import { useLanguage } from '../context/LanguageContext';
+import { useTheme } from '../context/ThemeContext';
 
 export default function Navbar({ activeTab, setActiveTab, queueCount = 3 }) {
-  const tabs = [
-    { id: 'workspaces', label: 'Workspaces' },
-    { id: 'inspector', label: 'Pre-Flight Inspector' },
-    { id: 'registry', label: 'Rule Registry' },
-    { id: 'queue', label: 'Manager Queue', badge: queueCount },
-    { id: 'telemetry', label: 'Telemetry' },
+  const { user, isAdmin, isWriter, logout, unreadNotifications } = useAuth();
+  const { language, setLanguage, languages, t } = useLanguage();
+  const { isDark, toggleTheme } = useTheme();
+
+  const [userDropdownOpen, setUserDropdownOpen] = useState(false);
+  const [langDropdownOpen, setLangDropdownOpen] = useState(false);
+
+  // Filter tabs according to role
+  const adminTabs = [
+    { id: 'registry', label: t('nav_registry', 'Rule Registry') },
+    { id: 'queue', label: t('nav_queue', 'Review Queue'), badge: queueCount },
+    { id: 'telemetry', label: t('nav_telemetry', 'Telemetry & Facts') },
+    { id: 'team', label: t('nav_team', 'Team Management') },
+    { id: 'workspaces', label: t('nav_workspaces', 'Workspace Directory') },
   ];
 
+  const writerTabs = [
+    { id: 'inspector', label: t('nav_inspector', 'Pre-Flight Inspector') },
+    { id: 'workspaces', label: t('nav_workspaces', 'My Workspace') },
+  ];
+
+  const visibleTabs = isAdmin ? adminTabs : writerTabs;
+  const currentLangObj = languages.find((l) => l.code === language) || languages[0];
+
   return (
-    <header className="sticky top-0 z-40 w-full bg-white border-b border-[#E5E7EB] px-6 h-14 flex items-center justify-between">
-      {/* Left: Brand Identity & Workspace Breadcrumb */}
-      <div className="flex items-center gap-3">
-        {/* BrandGuard Shield Icon */}
-        <div className="flex items-center gap-2">
-          <svg className="w-6 h-6 shrink-0" viewBox="0 0 28 28" fill="none">
-            <rect width="28" height="28" rx="6" fill="#0F5132" />
-            <path
-              d="M14 6L8 8.5V14C8 18 10.8 21.2 14 22C17.2 21.2 20 18 20 14V8.5L14 6Z"
-              fill="white"
-            />
-            <path
-              d="M14 8L10 9.8V14C10 16.8 11.8 19.4 14 20.1C16.2 19.4 18 16.8 18 14V9.8L14 8Z"
-              fill="#0F5132"
-            />
-          </svg>
-          <span className="font-bold text-zinc-900 text-[15px] tracking-tight">BrandGuard</span>
+    <>
+      {/* Skip to Main Content Link for WCAG Accessibility */}
+      <a
+        href="#main-content"
+        className="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-50 focus:px-4 focus:py-2 focus:bg-emerald-600 focus:text-white focus:rounded-md focus:shadow-lg focus:font-semibold text-xs"
+      >
+        Skip to main content
+      </a>
+
+      <header
+        role="banner"
+        className="sticky top-0 z-40 w-full bg-white dark:bg-zinc-900 border-b border-[#E5E7EB] dark:border-zinc-800 px-6 h-14 flex items-center justify-between transition-colors"
+      >
+        {/* Left: Brand Identity & Active Ruleset */}
+        <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2">
+            <div className="w-7 h-7 rounded-lg bg-[#0A3423] dark:bg-emerald-950 flex items-center justify-center border border-emerald-900">
+              <Shield className="w-4 h-4 text-[#00D4B6]" />
+            </div>
+            <span className="font-bold text-zinc-900 dark:text-white text-[15px] tracking-tight">
+              {t('app_title', 'BrandGuard')}
+            </span>
+          </div>
+
+          <div className="flex items-center gap-1.5 text-xs text-zinc-500 dark:text-zinc-400 font-normal ml-1">
+            <span>NovaPay</span>
+            <span className="text-zinc-400">›</span>
+            <span className="text-zinc-700 dark:text-zinc-300 font-medium">
+              {t('app_subtitle', 'Marketing Compiler')}
+            </span>
+          </div>
+
+          {/* Ruleset Status Pill */}
+          <div className="ml-2 hidden sm:inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full border border-emerald-200 dark:border-emerald-800 bg-[#EAF5EE] dark:bg-emerald-950 font-mono text-[11px] text-[#0A3423] dark:text-emerald-300 font-medium">
+            <span className="w-2 h-2 rounded-full bg-emerald-600 dark:bg-emerald-400 inline-block shadow-sm"></span>
+            <span>{t('ruleset_active', 'Ruleset v3.2 · Active')}</span>
+          </div>
+
+          {/* Role Badge */}
+          {isAdmin && (
+            <span className="ml-1 hidden md:inline-flex items-center px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-[#0A3423] text-emerald-300 border border-emerald-900">
+              {t('role_admin', 'ADMIN · BRAND LEAD')}
+            </span>
+          )}
+          {isWriter && (
+            <span className="ml-1 hidden md:inline-flex items-center px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-sky-100 dark:bg-sky-950 text-sky-800 dark:text-sky-300 border border-sky-300 dark:border-sky-800">
+              {t('role_writer', 'CONTENT WRITER')}
+            </span>
+          )}
         </div>
 
-        {/* Breadcrumb */}
-        <div className="flex items-center gap-1.5 text-xs text-zinc-500 font-normal ml-1">
-          <span>Northwind</span>
-          <span className="text-zinc-400">›</span>
-          <span className="text-zinc-700 font-medium">NovaPay</span>
-        </div>
+        {/* Center: Role-Based Navigation Tabs */}
+        <nav
+          role="navigation"
+          aria-label="Main Navigation"
+          className="flex items-center gap-6 h-full text-xs"
+        >
+          {visibleTabs.map((tab) => {
+            const isActive = activeTab === tab.id;
+            return (
+              <button
+                key={tab.id}
+                type="button"
+                onClick={() => setActiveTab(tab.id)}
+                aria-current={isActive ? 'page' : undefined}
+                className={`h-full flex items-center gap-1.5 px-0.5 border-b-2 font-medium transition-colors relative cursor-pointer ${
+                  isActive
+                    ? 'border-[#0A3423] dark:border-emerald-400 text-zinc-950 dark:text-white font-semibold'
+                    : 'border-transparent text-zinc-500 dark:text-zinc-400 hover:text-zinc-800 dark:hover:text-zinc-200'
+                }`}
+              >
+                <span>{tab.label}</span>
+                {tab.badge !== undefined && tab.badge > 0 && (
+                  <span className="bg-rose-100 dark:bg-rose-950 text-rose-700 dark:text-rose-300 border border-rose-200 dark:border-rose-900 font-mono text-[11px] px-1.5 py-0.2 rounded-full font-semibold">
+                    {tab.badge}
+                  </span>
+                )}
+              </button>
+            );
+          })}
+        </nav>
 
-        {/* Ruleset Status Pill */}
-        <div className="ml-2 hidden sm:inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full border border-emerald-200 bg-[#EAF5EE] font-mono text-[11px] text-[#0F5132] font-medium">
-          <span className="w-2 h-2 rounded-full bg-emerald-600 inline-block shadow-sm"></span>
-          <span>Ruleset v3.2 · Active</span>
-        </div>
-      </div>
-
-      {/* Center: Navigation Tabs */}
-      <nav className="flex items-center gap-6 h-full text-xs">
-        {tabs.map((tab) => {
-          const isActive = activeTab === tab.id;
-          return (
+        {/* Right: Language Switcher, Theme Toggle, Notifications & User Dropdown */}
+        <div className="flex items-center gap-3">
+          {/* Multi-Language Selector Dropdown */}
+          <div className="relative">
             <button
-              key={tab.id}
-              onClick={() => setActiveTab(tab.id)}
-              className={`h-full flex items-center gap-1.5 px-0.5 border-b-2 font-medium transition-colors relative ${
-                isActive
-                  ? 'border-[#0F5132] text-zinc-950 font-semibold'
-                  : 'border-transparent text-zinc-500 hover:text-zinc-800'
-              }`}
+              type="button"
+              onClick={() => setLangDropdownOpen(!langDropdownOpen)}
+              title="Change Language"
+              aria-label={`Language switcher, current: ${currentLangObj.name}`}
+              aria-expanded={langDropdownOpen}
+              className="flex items-center gap-1.5 px-2 py-1 text-xs font-medium rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-700 transition cursor-pointer"
             >
-              <span>{tab.label}</span>
-              {tab.badge !== undefined && tab.badge > 0 && (
-                <span className="bg-rose-100 text-rose-700 font-mono text-[11px] px-1.5 py-0.2 rounded-full font-semibold">
-                  {tab.badge}
-                </span>
+              <span>{currentLangObj.flag}</span>
+              <span className="font-mono text-[11px] font-semibold">{currentLangObj.code.toUpperCase()}</span>
+              <ChevronDown className="w-3 h-3 text-zinc-400" />
+            </button>
+
+            {langDropdownOpen && (
+              <div
+                className="absolute right-0 mt-2 w-40 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl shadow-lg py-1 z-50 text-xs"
+                onMouseLeave={() => setLangDropdownOpen(false)}
+              >
+                <div className="px-3 py-1.5 text-[10px] font-mono text-zinc-400 border-b border-zinc-100 dark:border-zinc-800">
+                  Select Language
+                </div>
+                {languages.map((l) => (
+                  <button
+                    key={l.code}
+                    type="button"
+                    onClick={() => {
+                      setLanguage(l.code);
+                      setLangDropdownOpen(false);
+                    }}
+                    className={`w-full flex items-center justify-between px-3 py-2 text-left hover:bg-zinc-100 dark:hover:bg-zinc-800 transition cursor-pointer ${
+                      language === l.code ? 'font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-50/50 dark:bg-emerald-950/50' : 'text-zinc-700 dark:text-zinc-300'
+                    }`}
+                  >
+                    <span className="flex items-center gap-2">
+                      <span>{l.flag}</span>
+                      <span>{l.name}</span>
+                    </span>
+                    {language === l.code && <span className="text-emerald-600 text-xs">✓</span>}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Light / Dark Mode Toggle */}
+          <button
+            type="button"
+            onClick={toggleTheme}
+            title={isDark ? "Switch to light mode" : "Switch to dark mode"}
+            aria-label={isDark ? "Switch to light mode" : "Switch to dark mode"}
+            className="text-zinc-500 dark:text-zinc-400 hover:text-zinc-800 dark:hover:text-zinc-200 p-1.5 rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors cursor-pointer"
+          >
+            {isDark ? <Sun className="w-4 h-4 text-amber-400" /> : <Moon className="w-4 h-4" strokeWidth={1.75} />}
+          </button>
+
+          {/* Notification Bell */}
+          <div className="relative">
+            <button
+              type="button"
+              aria-label={`Notifications ${unreadNotifications > 0 ? `(${unreadNotifications} unread)` : ''}`}
+              className="text-zinc-500 dark:text-zinc-400 hover:text-zinc-800 dark:hover:text-zinc-200 p-1.5 rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors relative cursor-pointer"
+            >
+              <Bell className="w-4 h-4" strokeWidth={1.75} />
+              {unreadNotifications > 0 && (
+                <span className="absolute top-1 right-1 w-2 h-2 rounded-full bg-rose-600 ring-2 ring-white dark:ring-zinc-900"></span>
               )}
             </button>
-          );
-        })}
-      </nav>
+          </div>
 
-      {/* Right: Notification Bell & User Avatar */}
-      <div className="flex items-center gap-4">
-        <button
-          type="button"
-          aria-label="Notifications"
-          className="text-zinc-500 hover:text-zinc-800 transition-colors p-1"
-        >
-          <Bell className="w-4 h-4" strokeWidth={1.75} />
-        </button>
+          {/* User Profile & Role Indicator */}
+          <div className="relative">
+            <button
+              type="button"
+              onClick={() => setUserDropdownOpen(!userDropdownOpen)}
+              aria-label="User profile menu"
+              aria-expanded={userDropdownOpen}
+              className="flex items-center gap-2 p-1 rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors cursor-pointer text-left"
+            >
+              <div
+                className="w-7 h-7 rounded-full flex items-center justify-center font-bold text-[11px] text-white shadow-xs shrink-0"
+                style={{ backgroundColor: user?.avatar_color || '#0A3423' }}
+              >
+                {(user?.first_name?.[0] || user?.username?.[0] || 'U').toUpperCase()}
+              </div>
+              <div className="hidden lg:block">
+                <div className="text-xs font-semibold text-zinc-900 dark:text-white leading-none">
+                  {user?.name || user?.username || 'User'}
+                </div>
+                <div className="text-[10px] text-zinc-500 font-mono mt-0.5">
+                  {user?.role}
+                </div>
+              </div>
+              <ChevronDown className="w-3.5 h-3.5 text-zinc-400" />
+            </button>
 
-        {/* User Profile Avatar */}
-        <div className="w-8 h-8 rounded-full overflow-hidden border border-zinc-200 ring-2 ring-emerald-100/50 cursor-pointer shrink-0">
-          <img
-            src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=120&q=80"
-            alt="User avatar"
-            className="w-full h-full object-cover"
-            onError={(e) => {
-              // Graceful fallback to styled initials avatar
-              e.currentTarget.style.display = 'none';
-              e.currentTarget.parentElement.innerHTML =
-                '<div class="w-full h-full bg-[#0F5132] text-white flex items-center justify-center font-bold text-xs">AM</div>';
-            }}
-          />
+            {/* User Dropdown Menu */}
+            {userDropdownOpen && (
+              <div
+                className="absolute right-0 mt-2 w-56 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl shadow-lg py-1 z-50 text-xs"
+                onMouseLeave={() => setUserDropdownOpen(false)}
+              >
+                <div className="px-3 py-2 border-b border-zinc-100 dark:border-zinc-800">
+                  <p className="font-semibold text-zinc-900 dark:text-white">{user?.name}</p>
+                  <p className="text-[11px] text-zinc-500">{user?.email}</p>
+                  <p className="text-[10px] font-mono text-zinc-400 mt-0.5">{user?.department}</p>
+                </div>
+
+                <div className="px-3 py-1.5 text-[11px] font-mono text-zinc-500 dark:text-zinc-400 bg-zinc-50 dark:bg-zinc-800/50 flex items-center justify-between">
+                  <span>Active Role:</span>
+                  <span className="font-bold text-zinc-800 dark:text-zinc-200">{user?.role}</span>
+                </div>
+
+                <div className="border-t border-zinc-100 dark:border-zinc-800 mt-1">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setUserDropdownOpen(false);
+                      logout();
+                    }}
+                    className="w-full text-left px-3 py-2 text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 flex items-center gap-2 cursor-pointer transition-colors"
+                  >
+                    <LogOut className="w-3.5 h-3.5" />
+                    Sign out
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
         </div>
-      </div>
-    </header>
+      </header>
+    </>
   );
 }

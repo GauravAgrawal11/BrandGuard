@@ -62,6 +62,95 @@ def rgb_to_lab(rgb_val):
     return lab
 
 
+def cie76(lab1, lab2):
+    """CIE76 color difference (Euclidean distance in CIELAB space)."""
+    return float(np.linalg.norm(np.array(lab1, dtype=np.float64) - np.array(lab2, dtype=np.float64)))
+
+
+def ciede2000(lab1, lab2, k_L=1.0, k_C=1.0, k_H=1.0):
+    """
+    CIEDE2000 standard color difference calculation (Sharma, Wu, Dalal 2005).
+    Accurately accounts for non-uniformities in human color perception.
+    """
+    L1, a1, b1 = float(lab1[0]), float(lab1[1]), float(lab1[2])
+    L2, a2, b2 = float(lab2[0]), float(lab2[1]), float(lab2[2])
+
+    C1 = math.sqrt(a1**2 + b1**2)
+    C2 = math.sqrt(a2**2 + b2**2)
+    C_bar = (C1 + C2) / 2.0
+
+    G = 0.5 * (1.0 - math.sqrt((C_bar**7) / (C_bar**7 + 25.0**7))) if (C_bar**7 + 25.0**7) > 0 else 0.0
+    a1_prime = (1.0 + G) * a1
+    a2_prime = (1.0 + G) * a2
+
+    C1_prime = math.sqrt(a1_prime**2 + b1**2)
+    C2_prime = math.sqrt(a2_prime**2 + b2**2)
+
+    h1_prime = math.degrees(math.atan2(b1, a1_prime)) % 360.0
+    h2_prime = math.degrees(math.atan2(b2, a2_prime)) % 360.0
+
+    delta_L_prime = L2 - L1
+    delta_C_prime = C2_prime - C1_prime
+
+    if C1_prime * C2_prime == 0.0:
+        delta_h_prime = 0.0
+    elif abs(h2_prime - h1_prime) <= 180.0:
+        delta_h_prime = h2_prime - h1_prime
+    elif h2_prime - h1_prime > 180.0:
+        delta_h_prime = (h2_prime - h1_prime) - 360.0
+    else:
+        delta_h_prime = (h2_prime - h1_prime) + 360.0
+
+    delta_H_prime = 2.0 * math.sqrt(C1_prime * C2_prime) * math.sin(math.radians(delta_h_prime / 2.0))
+
+    L_bar_prime = (L1 + L2) / 2.0
+    C_bar_prime = (C1_prime + C2_prime) / 2.0
+
+    if C1_prime * C2_prime == 0.0:
+        h_bar_prime = h1_prime + h2_prime
+    elif abs(h1_prime - h2_prime) <= 180.0:
+        h_bar_prime = (h1_prime + h2_prime) / 2.0
+    elif (h1_prime + h2_prime) < 360.0:
+        h_bar_prime = (h1_prime + h2_prime + 360.0) / 2.0
+    else:
+        h_bar_prime = (h1_prime + h2_prime - 360.0) / 2.0
+
+    T = (1.0 - 0.17 * math.cos(math.radians(h_bar_prime - 30.0))
+         + 0.24 * math.cos(math.radians(2.0 * h_bar_prime))
+         + 0.32 * math.cos(math.radians(3.0 * h_bar_prime + 6.0))
+         - 0.20 * math.cos(math.radians(4.0 * h_bar_prime - 63.0)))
+
+    delta_theta = 30.0 * math.exp(-(((h_bar_prime - 275.0) / 25.0)**2))
+    R_C = 2.0 * math.sqrt((C_bar_prime**7) / (C_bar_prime**7 + 25.0**7)) if (C_bar_prime**7 + 25.0**7) > 0 else 0.0
+    S_L = 1.0 + ((0.015 * (L_bar_prime - 50.0)**2) / math.sqrt(20.0 + (L_bar_prime - 50.0)**2))
+    S_C = 1.0 + 0.045 * C_bar_prime
+    S_H = 1.0 + 0.015 * C_bar_prime * T
+    R_T = -math.sin(math.radians(2.0 * delta_theta)) * R_C
+
+    term_L = delta_L_prime / (k_L * S_L)
+    term_C = delta_C_prime / (k_C * S_C)
+    term_H = delta_H_prime / (k_H * S_H)
+
+    dE2 = term_L**2 + term_C**2 + term_H**2 + R_T * term_C * term_H
+    return float(math.sqrt(max(0.0, dE2)))
+
+
+def calculate_delta_e(lab1, lab2, algorithm=None):
+    """
+    Computes color difference between two Lab coordinates.
+    Supports 'CIEDE2000' (default) with 'CIE76' fallback.
+    Algorithm is configurable via settings.BRANDGUARD_DEFAULT_COLOR_METRIC.
+    """
+    from django.conf import settings
+    metric = algorithm or getattr(settings, 'BRANDGUARD_DEFAULT_COLOR_METRIC', 'CIEDE2000')
+    if metric.upper() == 'CIE76':
+        return cie76(lab1, lab2)
+    try:
+        return ciede2000(lab1, lab2)
+    except Exception:
+        return cie76(lab1, lab2)
+
+
 def srgb_channel_to_linear(c_val):
     c = float(c_val) / 255.0
     return c / 12.92 if c <= 0.04045 else ((c + 0.055) / 1.055) ** 2.4
@@ -144,20 +233,25 @@ def audit_image_array(img_rgb, profile, file_label="Asset"):
 
             c_lab = rgb_to_lab(cluster_rgb)
 
+            from django.conf import settings
+            color_metric = getattr(settings, 'BRANDGUARD_DEFAULT_COLOR_METRIC', 'CIEDE2000')
+            sys_threshold = float(getattr(settings, 'BRANDGUARD_COLOR_DELTA_THRESHOLD', 4.0))
+
             if approved_labs:
                 dists = []
                 for swatch, s_lab in approved_labs:
-                    de = float(np.linalg.norm(c_lab - s_lab))
+                    de = calculate_delta_e(c_lab, s_lab, algorithm=color_metric)
                     dists.append((de, swatch))
                 dists.sort(key=lambda x: x[0])
                 min_de, nearest_swatch = dists[0]
-                allowed_tol = float(nearest_swatch.get('max_delta_e', 4.0))
+                allowed_tol = float(nearest_swatch.get('max_delta_e', sys_threshold))
             else:
                 min_de = 0.0
                 nearest_swatch = {"name": "Approved", "hex": "#0F172A"}
-                allowed_tol = 4.0
+                allowed_tol = sys_threshold
 
-            if min_de > max(4.0, allowed_tol):
+            effective_threshold = max(sys_threshold, allowed_tol)
+            if min_de > effective_threshold:
                 cluster_hex = rgb_to_hex(cluster_rgb)
                 if cluster_hex in flagged_colors:
                     continue
@@ -212,14 +306,14 @@ def audit_image_array(img_rgb, profile, file_label="Asset"):
                 c2 = valid_clusters[j]
                 lab1 = rgb_to_lab(c1)
                 lab2 = rgb_to_lab(c2)
-                de_normal = float(np.linalg.norm(lab1 - lab2))
+                de_normal = calculate_delta_e(lab1, lab2)
 
                 if de_normal > 25.0:
                     deut1 = simulate_color_blindness(np.array([c1]), "deuteranopia")[0]
                     deut2 = simulate_color_blindness(np.array([c2]), "deuteranopia")[0]
                     lab_d1 = rgb_to_lab(deut1)
                     lab_d2 = rgb_to_lab(deut2)
-                    de_deut = float(np.linalg.norm(lab_d1 - lab_d2))
+                    de_deut = calculate_delta_e(lab_d1, lab_d2)
 
                     if (de_deut < 8.0 or de_deut < 28.0 or (de_deut / de_normal < 0.45)) and not cvd_flagged:
                         cvd_flagged = True

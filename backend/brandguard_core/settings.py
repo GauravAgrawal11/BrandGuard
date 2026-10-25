@@ -26,12 +26,16 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
     'corsheaders',
+    'rest_framework',
     'governance',
 ]
+
+AUTH_USER_MODEL = 'governance.BrandGuardUser'
 
 MIDDLEWARE = [
     'corsheaders.middleware.CorsMiddleware',
     'django.middleware.security.SecurityMiddleware',
+    'whitenoise.middleware.WhiteNoiseMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
@@ -104,6 +108,14 @@ USE_TZ = True
 
 STATIC_URL = '/static/'
 STATIC_ROOT = BASE_DIR / 'staticfiles'
+STORAGES = {
+    "default": {
+        "BACKEND": "django.core.files.storage.FileSystemStorage",
+    },
+    "staticfiles": {
+        "BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage",
+    },
+}
 
 MEDIA_URL = '/media/'
 MEDIA_ROOT = BASE_DIR / 'media'
@@ -116,3 +128,39 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 # CORS configuration
 CORS_ALLOW_ALL_ORIGINS = True
 CORS_ALLOW_CREDENTIALS = True
+CORS_ALLOW_HEADERS = [
+    'accept',
+    'accept-encoding',
+    'authorization',
+    'content-type',
+    'dnt',
+    'origin',
+    'user-agent',
+    'x-csrftoken',
+    'x-requested-with',
+]
+
+# REST Framework settings
+REST_FRAMEWORK = {
+    'DEFAULT_AUTHENTICATION_CLASSES': [
+        'governance.auth.BrandGuardHeaderAuthentication',
+        'rest_framework.authentication.SessionAuthentication',
+    ],
+    'DEFAULT_PERMISSION_CLASSES': [
+        'rest_framework.permissions.IsAuthenticated',
+    ],
+    'UNAUTHENTICATED_USER': None,
+}
+
+# BrandGuard System Settings & Defaults
+BRANDGUARD_SECRET_KEY = os.environ.get('BRANDGUARD_SECRET_KEY', 'brandguard-hmac-integrity-key-2026-production')
+BRANDGUARD_RULES_VERSION = 'v3.2'
+BRANDGUARD_DEFAULT_COLOR_METRIC = 'CIEDE2000'  # 'CIEDE2000' with 'CIE76' fallback
+BRANDGUARD_COLOR_DELTA_THRESHOLD = 4.0
+BRANDGUARD_CONFIDENTIAL_MODE_DEFAULT = True
+BRANDGUARD_FRICTION_MIN_TRIGGERS = 20
+BRANDGUARD_SCORING_WEIGHTS = {
+    'BLOCKER': 18.0,
+    'WARNING': 8.0,
+    'APPROVED_EXCEPTION_DEDUCTION': 4.0,  # 0 blockers, 1 approved exception -> 100 - 4 = 96/100
+}

@@ -7,10 +7,51 @@
     font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
     color: #09090b;
     background-color: #ffffff;
+    transition: background-color 0.2s ease, color 0.2s ease;
   }
   code, pre, .font-mono {
     font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
   }
+}
+
+/* Dark mode base styles conforming to WCAG 2.1 AAA contrast */
+html.dark {
+  color-scheme: dark;
+}
+
+html.dark body {
+  background-color: #0b0f19;
+  color: #f8fafc;
+}
+
+/* Accessibility: Visible focus outline for keyboard navigation */
+:focus-visible {
+  outline: 2px solid #10b981;
+  outline-offset: 2px;
+}
+
+/* Screen-reader only utility */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border-width: 0;
+}
+
+.focus\:not-sr-only:focus {
+  position: static;
+  width: auto;
+  height: auto;
+  padding: 0.5rem 1rem;
+  margin: 0;
+  overflow: visible;
+  clip: auto;
+  white-space: normal;
 }
 
 /* Developer-linter minimal crisp scrollbars */
@@ -29,9 +70,25 @@
   background: #a1a1aa;
 }
 
+html.dark ::-webkit-scrollbar-track {
+  background: #0f172a;
+}
+html.dark ::-webkit-scrollbar-thumb {
+  background: #334155;
+}
+html.dark ::-webkit-scrollbar-thumb:hover {
+  background: #475569;
+}
+
 /* Subtle dot-grid for canvas inspection */
 .canvas-dot-grid {
   background-color: #fafafa;
   background-image: radial-gradient(#e4e4e7 1px, transparent 1px);
+  background-size: 14px 14px;
+}
+
+html.dark .canvas-dot-grid {
+  background-color: #0d1322;
+  background-image: radial-gradient(#1e293b 1px, transparent 1px);
   background-size: 14px 14px;
 }
